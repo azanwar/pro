@@ -32,16 +32,30 @@ public class CreatePollServlet extends HttpServlet {
 	protected void service(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 		//name
 		String name = request.getParameter("name");
+		if (name==null||name.equals("")) {
+			RequestDispatcher dispatch = getServletContext().getRequestDispatcher("/CreatePoll.jsp?new=true&invalid=true");
+			dispatch.forward(request, response);
+			return;
+		}
 		
 		//permitted users
 		HashSet<String> permitted = new HashSet<String>();
-		for (int i=0; i<Integer.parseInt((String)request.getParameter("numPermitted")); i++) {
-			permitted.add(request.getParameter("permitteduser"+Integer.toString(i)));
+		String allowed = request.getParameter("allowedusers");
+		String[] allowedUsers = allowed.split(",");
+		for (int i=0; i<allowedUsers.length; i++) {
+			System.out.println(allowedUsers[i]);
+			permitted.add(allowedUsers[i].trim());
 		}
 		
-		Poll poll = new Poll(name, -20, (String)request.getSession().getAttribute("loggedOn"), permitted); 
+		Poll poll = new Poll(name, -20, (String)request.getSession().getAttribute("loggedOn"), permitted);
+		poll.setPrivPoll(request.getParameter("polltype").equals("private"));
 		
 		//questions and responses
+		if (request.getParameter("question0").equals("")) {
+			RequestDispatcher dispatch = getServletContext().getRequestDispatcher("/CreatePoll.jsp?new=true&invalid=true");
+			dispatch.forward(request, response);
+			return;
+		}
 		for (int i=0; i<Integer.parseInt((String)request.getSession().getAttribute("numquestions"))-1; i++) {
 			Question q = new Question(request.getParameter("question"+Integer.toString(i)));
 			for (int j=0; j<4; j++) {
@@ -52,8 +66,7 @@ public class CreatePollServlet extends HttpServlet {
 	
 		//write to database
 		ProPollServer.addPoll(poll, (String)request.getSession().getAttribute("loggedOn"));
-		request.setAttribute("pollName", poll.getName());
-		RequestDispatcher dispatch = getServletContext().getRequestDispatcher("/PollResults");
+		RequestDispatcher dispatch = getServletContext().getRequestDispatcher("/PollResults?pollName="+poll.getName());
 		dispatch.forward(request, response);
 	}
 

@@ -28,7 +28,9 @@ public class Profile extends HttpServlet {
 		if (username!=null) {
 			ArrayList<String> pollNames = ProPollServer.getJoinedPolls(username);
 			ArrayList<String> createdPolls = ProPollServer.getCreatedPolls(username);
+			ArrayList<String> invPolls = ProPollServer.getInvitedPolls(username);
 			request.setAttribute("joinedPolls", pollNames);
+			request.setAttribute("invPolls", invPolls);
 			request.setAttribute("createdPolls",createdPolls);
 			next = "/profile.jsp";
 		}

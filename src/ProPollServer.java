@@ -97,6 +97,42 @@ public class ProPollServer {
 			return null;
 		}
 	}
+	
+	public static ArrayList<String> getInvitedPolls(String un){
+		int userID = getUserID(un);
+ 		ArrayList<String> out = new ArrayList<String>();
+		try {
+			Class.forName("com.mysql.jdbc.Driver");
+			Connection conn = DriverManager.getConnection("jdbc:mysql://localhost/ProPollData?user=root&password=root&useSSL=false");
+			PreparedStatement ps = conn.prepareStatement("SELECT * FROM AllowedUsers WHERE userID=?");
+			ps.setInt(1, userID);
+			ResultSet rs = ps.executeQuery();
+			System.out.println("got allowedusers");
+			while (rs.next()) {
+				PreparedStatement ps0 = conn.prepareStatement("SELECT * FROM UserPolls WHERE userID=? AND pollID=?");
+				System.out.println("got polls");
+				ps0.setInt(1, userID);
+				int pollID = rs.getInt("pollID");
+				ps0.setInt(2, pollID);
+				ResultSet rs0 = ps0.executeQuery();
+				if (!rs0.next()) {
+					System.out.println("not done");
+					PreparedStatement ps1 = conn.prepareStatement("SELECT * FROM Polls WHERE  pollID=?");
+					ps1.setInt(1, pollID);
+					ResultSet rs1 = ps1.executeQuery();
+					rs1.next();
+					out.add(rs1.getString("pollName"));
+				}
+			}
+			return out;
+		}
+		catch(ClassNotFoundException | SQLException e) {
+ 			e.printStackTrace();
+ 			return null;
+ 		}
+ 		
+ 	}
+	
 	public static ArrayList<String> getJoinedPolls(String un) {
 		try {
 			Class.forName("com.mysql.jdbc.Driver");
@@ -133,6 +169,40 @@ public class ProPollServer {
 		catch(ClassNotFoundException | SQLException e) {
 			e.printStackTrace();
 			return null;
+		}
+	}
+	
+	public static boolean checkForResponse(int pollID,String un) {
+		int userID = getUserID(un);
+		try {
+			Class.forName("com.mysql.jdbc.Driver");
+			Connection conn = DriverManager.getConnection("jdbc:mysql://localhost/ProPollData?user=root&password=root&useSSL=false");
+			PreparedStatement ps = conn.prepareStatement("SELECT * FROM UserPolls WHERE userID=? AND pollID=?");
+			ps.setInt(1, userID);
+			ps.setInt(2,pollID);
+			ResultSet rs = ps.executeQuery();
+			return (rs.next());
+		}catch(ClassNotFoundException | SQLException e) {
+			e.printStackTrace();
+			return false;
+		}	
+	}
+	
+	public static int getUserID(String un) {
+		try {
+			Class.forName("com.mysql.jdbc.Driver");
+			Connection conn = DriverManager.getConnection("jdbc:mysql://localhost/ProPollData?user=root&password=root&useSSL=false");
+			PreparedStatement ps = conn.prepareStatement("SELECT userID FROM Users WHERE username=?");
+			ps.setString(1, un);
+			ResultSet rs = ps.executeQuery();
+			rs.next();
+			int userID = rs.getInt("userID");
+			rs.close();
+			ps.close();
+			return userID;
+		}catch(ClassNotFoundException | SQLException e) {
+			e.printStackTrace();
+			return 0;
 		}
 	}
 	
@@ -349,12 +419,14 @@ public class ProPollServer {
 				if (poll.getPollType()==true&&poll.getPermittedUsers().size()!=0) {
 					Iterator<String> p = poll.getPermittedUsers().iterator();
 					while (p.hasNext()) {
+						String un = p.next();
+						System.out.println(un);
+						int allowedID = getUserID(un);
 						PreparedStatement ps1 = conn.prepareStatement("INSERT INTO AllowedUsers (userID, pollID) VALUES(?, ?)");
-						ps1.setInt(1, 1); //dynamic
+						ps1.setInt(1, allowedID); //dynamic
 						ps1.setInt(2, pollID);
 						ps1.executeUpdate();
 						ps1.close();
-						p.next();
 					}
 				}
 				
@@ -390,27 +462,27 @@ public class ProPollServer {
 		return id;
 	}
 
-	public static Poll getPollInfo(int pollID, String userID) {
-		Poll poll = new Poll("", 0, userID, null);
+	public static Poll getPollInfo(int pollID) {
+		Poll poll = null;
 		try {
 			Class.forName("com.mysql.jdbc.Driver");
 			Connection conn = DriverManager.getConnection("jdbc:mysql://localhost/ProPollData?user=root&password=root&useSSL=false");
-			PreparedStatement ps0 = conn.prepareStatement("SELECT * FROM Polls WHERE pollID=?");
-			ps0.setInt(1,pollID);
-			ResultSet rs0 = ps0.executeQuery();
+			PreparedStatement ps10 = conn.prepareStatement("SELECT * FROM Polls WHERE pollID=?");
+			ps10.setInt(1,pollID);
+			ResultSet rs10 = ps10.executeQuery();
 			int creatorID = 0;
 			String name = "";
 			boolean priv = false;
-			if (rs0.next()) {
-				name = rs0.getString("pollName");
-				priv = rs0.getBoolean("private");
-				creatorID = rs0.getInt("creatorID");
+			if (rs10.next()) {
+				name = rs10.getString("pollName");
+				priv = rs10.getBoolean("private");
+				creatorID = rs10.getInt("creatorID");
 			}
-			rs0.close();
-			ps0.close();
-			ps0 = conn.prepareStatement("SELECT username FROM Users WHERE userID=?");
+			rs10.close();
+			ps10.close();
+			PreparedStatement ps0 = conn.prepareStatement("SELECT * FROM Users WHERE userID=?");
 			ps0.setInt(1, creatorID);
-			rs0 = ps0.executeQuery();
+			ResultSet rs0 = ps0.executeQuery();
 			rs0.next();
 			String creator = rs0.getString("username");
 			poll = new Poll(name, pollID, creator, new HashSet<String>());
@@ -442,9 +514,25 @@ public class ProPollServer {
 			ps0.close();
 			conn.close();
 		} catch (ClassNotFoundException | SQLException e) {
-			e.printStackTrace();
+			return poll;
 		}
 		return poll;
+	}
+	
+	public static boolean checkAllowed(String un, int pollID) {
+		int userID = getUserID(un);
+		try {
+			Class.forName("com.mysql.jdbc.Driver");
+			Connection conn = DriverManager.getConnection("jdbc:mysql://localhost/ProPollData?user=root&password=root&useSSL=false");
+			PreparedStatement ps = conn.prepareStatement("SELECT * FROM AllowedUsers WHERE userID=? AND pollID=?");
+			ps.setInt(1,userID);
+			ps.setInt(2,pollID);
+			ResultSet rs = ps.executeQuery();
+			return (rs.next());
+		} catch (ClassNotFoundException | SQLException e) {
+			e.printStackTrace();
+			return false;
+		}
 	}
 	
 	public static void updateResponse(int pollID, ArrayList<Integer> responsenum, String username) {
@@ -455,6 +543,20 @@ public class ProPollServer {
 			ps1.setInt(1,pollID);
 			ResultSet rs1 = ps1.executeQuery();
 			int i = 0;
+			int userID = -20;
+			if (username!=null) {
+				PreparedStatement ps = conn.prepareStatement("SELECT userID FROM Users WHERE username=?");
+				ps.setString(1, username);
+				ResultSet rs = ps.executeQuery();
+				rs.next();
+				userID = rs.getInt("userID");
+				rs.close();
+				ps.close();
+				ps = conn.prepareStatement("INSERT INTO UserPolls (userID,pollID) VALUES (?,?);");
+				ps.setInt(1, userID);
+				ps.setInt(2, pollID);
+				ps.executeUpdate();
+			}
 			while (rs1.next()) {
 				//getting all the responses for each question
 				PreparedStatement ps2 = conn.prepareStatement("SELECT * FROM Responses WHERE questionID=?");
@@ -470,22 +572,17 @@ public class ProPollServer {
 				ps3.setInt(2, responseid);
 				ps3.executeUpdate();
 				
-				PreparedStatement ps = conn.prepareStatement("SELECT userID FROM Users WHERE username=?");
-				ps.setString(1, username);
-				ResultSet rs = ps.executeQuery();
-				rs.next();
-				int userID = rs.getInt("userID");
-				rs.close();
-				ps.close();
 				
-				PreparedStatement ps4 = conn.prepareStatement("INSERT INTO UserResponses(userID, questionID, responseID, pollID) VALUES(?,?,?,?)");
-				ps4.setInt(1, userID);
-				ps4.setInt(2, rs1.getInt("questionID"));
-				ps4.setInt(3, responseid);
-				ps4.setInt(4, pollID);
-				ps4.executeUpdate();
-				
-				ps4.close();
+				if (username!=null) {
+					PreparedStatement ps4 = conn.prepareStatement("INSERT INTO UserResponses(userID, questionID, responseID, pollID) VALUES(?,?,?,?)");
+					ps4.setInt(1, userID);
+					ps4.setInt(2, rs1.getInt("questionID"));
+					ps4.setInt(3, responseid);
+					ps4.setInt(4, pollID);
+					ps4.executeUpdate();
+					
+					ps4.close();
+				}
 				ps3.close();
 				rs2.close();
 				ps2.close();
